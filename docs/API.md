@@ -18,6 +18,33 @@ Options:
 - `--version, -v`: Install a specific version
 - `--no-deps`: Skip dependency sealing (single package only)
 
+**Scope:** this is an alternative install path, not a hook on pip. Sealed builds
+and verifies wheels itself, then calls `pip install` on those files. A plain
+`pip install <package>` bypasses Sealed entirely.
+
+### `sealed trace <package>`
+
+Import-time behavioral tracing. **Observability, not containment -- do not use it
+to run untrusted code.** `os.system`, `ctypes`, `_socket`, `os.fork`/`os.spawn*`/
+`os.exec*`, C extension init and raw syscalls all bypass the hooks; only import
+time is covered. `sealed sandbox` is a deprecated alias.
+
+```bash
+sealed trace suspicious-package --timeout 30
+```
+
+### `sealed provenance <package>`
+
+Report upstream PyPI PEP 740 provenance for a release.
+
+```bash
+sealed provenance sigstore --version 4.4.0 --sha256 <sdist-sha256> --json
+```
+
+Exit 0 when an attestation bundle exists (and a supplied digest matches), 1 when
+absent/mismatched/errored. The Sigstore bundle is parsed, not cryptographically
+verified: `signature_verified` is `null`, never `true`.
+
 ### `sealed build <package>`
 
 Build and seal without installing.
@@ -190,3 +217,39 @@ for dep in deps:
 #   urllib3==2.4.0
 #   requests==2.32.3
 ```
+
+### ImportTracer
+
+```python
+from sealed import ImportTracer, NOT_A_SANDBOX_WARNING
+
+result = ImportTracer(timeout=30).trace("requests", "2.32.3")
+result.clean               # no high/critical events observed -- not a safety verdict
+result.contained           # always False: Sealed provides no containment
+result.behaviors           # list[TracedBehavior]
+result.to_dict()["warning"]  # NOT_A_SANDBOX_WARNING
+```
+
+`BehavioralSandbox`, `SandboxResult` and `SandboxBehavior` remain importable from
+`sealed.sandbox` as deprecated aliases; `ImportTracer.analyze()` is a deprecated
+alias of `.trace()`.
+
+### PyPIProvenanceClient
+
+```python
+from sealed import PyPIProvenanceClient
+
+info = PyPIProvenanceClient().for_package("sigstore", "4.4.0", artifact_sha256=None)
+info.available              # bool: did PyPI publish a PEP 740 bundle?
+info.publishers             # [PublisherIdentity(kind, repository, workflow, environment)]
+info.predicate_types        # in-toto predicate types
+info.subject_digests        # attested sha256 subjects
+info.transparency_log_indexes
+info.digest_match           # True/False/None (None = no artifact hash supplied)
+info.signature_verified     # always None: parsed, not verified
+info.summary
+```
+
+Network failures and 404s are reported as `available=False`, never raised.
+`sealed install` / `sealed build` record the same result as an
+`upstream_provenance` step inside the signed provenance chain.

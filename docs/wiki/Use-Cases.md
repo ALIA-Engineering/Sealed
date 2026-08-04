@@ -125,16 +125,28 @@ sealed verify my-library-1.0.0.seal.json \
 You found a suspicious package. Before installing, scan it:
 
 ```bash
-sealed sandbox suspicious-package
+sealed trace suspicious-package
 ```
 
-The sandbox imports it in an isolated process and monitors:
-- Network connections (blocked and logged)
-- Process spawning (blocked and logged)
+The tracer imports it in a child interpreter with an audit hook and wrappers, and
+records:
+- Network connections (`socket.connect`, blocked at the Python wrapper, recorded by the audit hook)
+- Process spawning (`subprocess.Popen`, `os.system`, `os.exec*`/`os.spawn*`)
+- Native code loading (`ctypes.dlopen`)
 - Sensitive file reads (.ssh, .aws, .env)
 - Secret env var access (tokens, passwords)
 
-If it tries to phone home or read your credentials, you know before it touches your system.
+**This is observability, not containment. Do not use it to run untrusted code.**
+The import executes with your privileges; `os.system`, `ctypes`, `_socket`,
+fork/exec and C extension init all bypass the hooks, and only *import* time is
+covered -- install-time `setup.py` is never observed. For genuinely suspicious
+packages, use a disposable VM with no network and no credentials.
+
+You can also ask who published it upstream:
+
+```bash
+sealed provenance suspicious-package
+```
 
 ## 7. Paranoid Mode - "Build it 3 times, prove it's the same"
 

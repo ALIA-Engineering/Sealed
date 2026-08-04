@@ -49,18 +49,41 @@ else:
     print("Source passed safety scan")
 ```
 
-## Behavioral Sandbox
+## Import-Time Tracing (not a sandbox)
+
+Observability only -- the traced import runs with full privileges and can bypass
+every hook (`os.system`, `ctypes`, `_socket`, fork/exec, C extension init).
 
 ```python
-from sealed import BehavioralSandbox
+from sealed import ImportTracer, NOT_A_SANDBOX_WARNING
 
-sandbox = BehavioralSandbox(timeout=30)
-result = sandbox.analyze("suspicious-package", "1.0.0")
+print(NOT_A_SANDBOX_WARNING)
 
-if not result.safe:
+tracer = ImportTracer(timeout=30)
+result = tracer.trace("suspicious-package", "1.0.0")
+
+assert result.contained is False  # Sealed never contains anything
+
+if not result.clean:
     for b in result.behaviors:
         if b.severity in ("critical", "high"):
             print(f"[{b.severity}] {b.type}: {b.details}")
+```
+
+`BehavioralSandbox` / `SandboxResult` still import as deprecated aliases.
+
+## Upstream PyPI Provenance (PEP 740)
+
+```python
+from sealed import PyPIProvenanceClient
+
+info = PyPIProvenanceClient().for_package("sigstore", "4.4.0")
+print(info.summary)
+if info.available:
+    for pub in info.publishers:
+        print("publisher:", pub)
+    print("attested digests:", info.subject_digests)
+# info.signature_verified is None: the bundle is parsed, not cryptographically verified
 ```
 
 ## Trust Graph

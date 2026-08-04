@@ -41,6 +41,8 @@ PyPI Registry
     v
 [8] Install
     pip install <verified artifact>
+    (Sealed calls pip. It does not hook pip: a plain `pip install` bypasses all
+     of the above.)
 ```
 
 ## The Chain Hash

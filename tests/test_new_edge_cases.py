@@ -1,4 +1,4 @@
-"""Edge case tests for sandbox, consensus, watchdog, and trust_graph modules."""
+"""Edge case tests for tracer, consensus, watchdog, and trust_graph modules."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import subprocess
 
 import pytest
 
-from sealed.sandbox import BehavioralSandbox, SandboxResult, SandboxBehavior
+from sealed.tracer import ImportTracer, TraceResult, TracedBehavior
 from sealed.consensus import ConsensusBuilder, ConsensusResult, ConsensusBuild
 from sealed.watchdog import IntegrityWatchdog, WatchdogSnapshot, IntegrityViolation
 from sealed.trust_graph import (
@@ -23,36 +23,36 @@ from sealed.seal import SealAuthority
 
 
 # ---------------------------------------------------------------------------
-# Sandbox edge cases
+# Import tracer edge cases
 # ---------------------------------------------------------------------------
 
-class TestSandboxTimeout:
-    """Package that times out during sandbox analysis."""
+class TestTracerTimeout:
+    """Package that times out during import tracing."""
 
     def test_timeout_sets_flag_and_behavior(self):
-        sandbox = BehavioralSandbox(timeout=1)
+        tracer = ImportTracer(timeout=1)
         # Patch subprocess.run to raise TimeoutExpired
-        with patch("sealed.sandbox.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=1)):
-            result = sandbox.analyze("slowpkg", "1.0.0")
+        with patch("sealed.tracer.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="test", timeout=1)):
+            result = tracer.trace("slowpkg", "1.0.0")
         assert result.timeout is True
         assert any(b.type == "timeout" for b in result.behaviors)
         assert any(b.severity == "high" for b in result.behaviors)
-        assert not result.safe  # timeout behavior is "high" severity
+        assert not result.clean  # timeout behavior is "high" severity
 
     def test_timeout_details_contain_seconds(self):
-        sandbox = BehavioralSandbox(timeout=5)
-        with patch("sealed.sandbox.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="t", timeout=5)):
-            result = sandbox.analyze("slowpkg", "1.0.0")
+        tracer = ImportTracer(timeout=5)
+        with patch("sealed.tracer.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="t", timeout=5)):
+            result = tracer.trace("slowpkg", "1.0.0")
         timeout_b = [b for b in result.behaviors if b.type == "timeout"][0]
         assert timeout_b.details["seconds"] == "5"
 
 
-class TestSandboxNonexistentPackage:
+class TestTracerNonexistentPackage:
     """Package that doesn't exist: analyze should still return a result."""
 
     def test_nonexistent_package_returns_result(self):
-        sandbox = BehavioralSandbox(timeout=10)
-        result = sandbox.analyze("sealed_definitely_not_a_real_package_xyz", "0.0.0")
+        tracer = ImportTracer(timeout=10)
+        result = tracer.trace("sealed_definitely_not_a_real_package_xyz", "0.0.0")
         # Should not crash; returns either an import error behavior or an error string
         assert result.package == "sealed_definitely_not_a_real_package_xyz"
         assert result.version == "0.0.0"
@@ -62,21 +62,21 @@ class TestSandboxNonexistentPackage:
         assert has_import_error or has_error_field
 
 
-class TestSandboxEmptyBehaviorList:
-    """SandboxResult with empty behavior list."""
+class TestTracerEmptyBehaviorList:
+    """TraceResult with empty behavior list."""
 
     def test_empty_behaviors_is_safe(self):
-        r = SandboxResult(package="pkg", version="1.0", behaviors=[])
+        r = TraceResult(package="pkg", version="1.0", behaviors=[])
         assert r.safe is True
 
     def test_empty_behaviors_digest_is_deterministic(self):
-        r1 = SandboxResult(package="a", version="1.0", behaviors=[])
-        r2 = SandboxResult(package="b", version="2.0", behaviors=[])
+        r1 = TraceResult(package="a", version="1.0", behaviors=[])
+        r2 = TraceResult(package="b", version="2.0", behaviors=[])
         # Same behaviors (empty) -> same digest
         assert r1.digest == r2.digest
 
     def test_empty_behaviors_to_dict(self):
-        r = SandboxResult(package="pkg", version="1.0", behaviors=[])
+        r = TraceResult(package="pkg", version="1.0", behaviors=[])
         d = r.to_dict()
         assert d["behaviors"] == []
         assert d["critical"] == 0
@@ -84,13 +84,13 @@ class TestSandboxEmptyBehaviorList:
         assert d["safe"] is True
 
 
-class TestSandboxWheelPathNotExists:
-    """Sandbox with wheel_path that doesn't exist on disk."""
+class TestTracerWheelPathNotExists:
+    """Tracer with wheel_path that doesn't exist on disk."""
 
     def test_nonexistent_wheel_path_returns_error(self, tmp_path):
         fake_wheel = tmp_path / "no_such_file.whl"
-        sandbox = BehavioralSandbox(timeout=10)
-        result = sandbox.analyze("pkg", "1.0", wheel_path=fake_wheel)
+        tracer = ImportTracer(timeout=10)
+        result = tracer.trace("pkg", "1.0", wheel_path=fake_wheel)
         # Should not crash. Will have an error from pip install failing
         assert result.package == "pkg"
         # pip install of nonexistent wheel should produce either error or import_error

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alia-sealed"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cryptographic supply chain attestation. Every binary proven from source to artifact."
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -33,3 +33,8 @@ Repository = "https://github.com/TxsharDev/Sealed"
 
 [tool.setuptools.packages.find]
 include = ["sealed*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "network: live-network tests against PyPI (skipped when network is unavailable)",
+]

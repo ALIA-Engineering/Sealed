@@ -1,4 +1,12 @@
-"""CLI: sealed install / build / verify / inspect / audit / keygen / registry / policy."""
+"""CLI: sealed install / build / verify / inspect / audit / keygen / reproduce /
+trace / provenance / consensus / watchdog / trust / registry / policy.
+
+`sealed install` is an alternative install path, not a hook on pip: it builds
+from source, seals, verifies, then calls pip on the artifacts it produced. A
+plain `pip install` bypasses Sealed completely.
+
+`sealed trace` (formerly `sealed sandbox`) is instrumentation, not containment.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +33,20 @@ SEAL_DIR = Path.home() / ".sealed"
 KEY_FILE = SEAL_DIR / "key.ed25519"
 STORE_DIR = SEAL_DIR / "store"
 POLICY_FILE = SEAL_DIR / "policy.json"
+
+
+def _safe_store_dir(package: str, version: str) -> Path:
+    """``STORE_DIR/<package>-<version>``, rejecting path traversal.
+
+    Package names and versions normally come from PyPI (``[A-Za-z0-9._-]+``),
+    but the join is hardened so a hostile value cannot escape the store.
+    """
+    for part in (package, version):
+        if not part or part in (".", "..") or any(
+            ch in part for ch in ("/", "\\", "\x00")
+        ):
+            raise ValueError(f"unsafe store path component: {part!r}")
+    return STORE_DIR / f"{package}-{version}"
 
 
 def _ensure_key() -> SealAuthority:
@@ -102,6 +124,40 @@ def _get_policy() -> tuple[PolicyEngine, SealRegistry]:
     return engine, registry
 
 
+def _record_upstream_provenance(chain, package: str, version: str,
+                                archive_hash: str) -> "ProvenanceInfo | None":
+    """Look up PyPI PEP 740 provenance and record the outcome in the chain.
+
+    Best effort: a network failure or a release with no attestation is recorded
+    as such, never fatal. This is the only trust signal in the chain that does
+    not originate on the local machine.
+    """
+    from sealed.provenance import PyPIProvenanceClient
+
+    try:
+        info = PyPIProvenanceClient().for_package(package, version, archive_hash)
+    except Exception as e:  # pragma: no cover - defensive
+        chain.add(step="upstream_provenance", input_hash=archive_hash,
+                  output_hash=archive_hash, available=False,
+                  error=f"{type(e).__name__}: {e}")
+        return None
+
+    chain.add(
+        step="upstream_provenance",
+        input_hash=archive_hash,
+        output_hash=archive_hash,
+        available=info.available,
+        publishers=[p.to_dict() for p in info.publishers],
+        predicate_types=info.predicate_types,
+        subject_digests=info.subject_digests,
+        transparency_log_indexes=info.transparency_log_indexes,
+        digest_match=info.digest_match,
+        signature_verified=info.signature_verified,
+        error=info.error,
+    )
+    return info
+
+
 def _build_and_seal_single(package: str, version: str,
                            authority: SealAuthority) -> tuple[Path, Path, Path, str]:
     """Build and seal one package. Returns (artifact, seal_path, chain_path, attestation_method)."""
@@ -114,8 +170,14 @@ def _build_and_seal_single(package: str, version: str,
         source.package, source.version,
     )
 
+    info = _record_upstream_provenance(
+        result.chain, source.package, source.version, source.archive_hash,
+    )
+    if info is not None:
+        print(f"    Upstream provenance: {info.summary}")
+
     seal = authority.seal(result.chain)
-    pkg_dir = STORE_DIR / f"{source.package}-{source.version}"
+    pkg_dir = _safe_store_dir(source.package, source.version)
     pkg_dir.mkdir(parents=True, exist_ok=True)
 
     seal_path = pkg_dir / "seal.json"
@@ -173,7 +235,12 @@ def cmd_install(args: argparse.Namespace) -> int:
 
         # Check if already sealed in store
         if pkg_version:
-            existing = STORE_DIR / f"{pkg_name}-{pkg_version}"
+            try:
+                existing = _safe_store_dir(pkg_name, pkg_version)
+            except ValueError as e:
+                print(f"    FAILED: {e}")
+                failed.append(pkg_name)
+                continue
             if existing.exists() and (existing / "seal.json").exists():
                 print(f"    Already sealed, skipping build.")
                 artifacts = [f for f in existing.iterdir()
@@ -228,9 +295,17 @@ def cmd_install(args: argparse.Namespace) -> int:
         print(f"    VERIFIED ({result.chain_length} steps)")
         installed.append((pkg_name, artifact))
 
-    # Install all verified artifacts
+    # Install all verified artifacts.
+    #
+    # SCOPE: this shells out to pip on wheels Sealed itself built and verified.
+    # Sealed is an *alternative install path*, not a guard on pip. A plain
+    # `pip install <pkg>` in the same environment does not consult Sealed at all
+    # and will happily overwrite anything installed here. There is no pip hook,
+    # no PEP 517 backend wrapper and no index shim.
     if installed:
         print(f"\n  Installing {len(installed)} verified packages...")
+        print("  NOTE: Sealed is an alternative install path, not a guard on pip.")
+        print("        A plain `pip install` bypasses Sealed entirely.")
         ret = subprocess.run(
             [sys.executable, "-m", "pip", "install"] +
             [str(a) for _, a in installed] +
@@ -419,20 +494,32 @@ def cmd_reproduce(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_sandbox(args: argparse.Namespace) -> int:
-    """Run behavioral analysis on a package."""
-    from sealed.sandbox import BehavioralSandbox
+def cmd_trace(args: argparse.Namespace) -> int:
+    """Trace what a package does at import time. Instrumentation, not containment."""
+    from sealed.tracer import ImportTracer, KNOWN_BYPASSES, NOT_A_SANDBOX_WARNING
 
-    print(f"Behavioral analysis: {args.package}")
-    print("  Importing in isolated subprocess with monitors...")
+    if getattr(args, "command", "") == "sandbox":
+        print("NOTE: `sealed sandbox` is deprecated and renamed to `sealed trace`.")
+        print("      It never provided containment. Use `sealed trace`.")
+    print(f"Import-time behavioral trace: {args.package}")
+    print(f"  WARNING: {NOT_A_SANDBOX_WARNING}")
+    print("  Importing in a child interpreter with audit hooks + wrappers...")
 
-    sandbox = BehavioralSandbox(timeout=args.timeout)
-    result = sandbox.analyze(args.package, args.version or "latest")
+    tracer = ImportTracer(timeout=args.timeout)
+    result = tracer.trace(args.package, args.version or "latest")
 
-    if result.safe:
-        print(f"\n  SAFE: No dangerous behaviors detected")
+    import_failed = any(b.type == "import_error" for b in result.behaviors)
+    if import_failed:
+        err = next((b.details.get("error") for b in result.behaviors
+                    if b.type == "import_error"), "unknown error")
+        print(f"\n  IMPORT FAILED: {err}")
+        print("  The package raised at import time, so no behavior was traced.")
+        print("  This is not a clean result: the trace observed nothing.")
+    elif result.clean:
+        print(f"\n  NO FINDINGS: nothing high/critical was observed at import.")
+        print(f"  This is not a safety verdict -- the trace can be bypassed.")
     else:
-        print(f"\n  UNSAFE: Dangerous behaviors detected")
+        print(f"\n  FINDINGS: high/critical behavior observed at import")
 
     if result.timeout:
         print(f"  TIMEOUT: Package took >{args.timeout}s to import")
@@ -443,10 +530,75 @@ def cmd_sandbox(args: argparse.Namespace) -> int:
         elif b.severity != "info":
             print(f"  [{b.severity}] {b.type}")
 
-    if result.error:
+    if result.error and not import_failed:
         print(f"  Error: {result.error}")
 
-    return 0 if result.safe else 1
+    print()
+    print("  Not observed by this tracer (documented bypasses):")
+    for bypass in KNOWN_BYPASSES:
+        print(f"    - {bypass}")
+    print("  Scope: import time only. Install-time setup.py execution is not")
+    print("  traced here; it is statically scanned by `sealed` source audit.")
+
+    return 1 if import_failed or not result.clean else 0
+
+
+def cmd_provenance(args: argparse.Namespace) -> int:
+    """Report upstream PyPI (PEP 740) provenance for a package release."""
+    from sealed.provenance import LOCAL_LOG_CAVEAT, PyPIProvenanceClient
+
+    client = PyPIProvenanceClient()
+    version = args.version
+    if not version:
+        try:
+            import httpx
+
+            meta = httpx.get(f"https://pypi.org/pypi/{args.package}/json",
+                             follow_redirects=True, timeout=30).json()
+            version = meta["info"]["version"]
+        except Exception as e:
+            print(f"FAILED: could not resolve latest version: {e}")
+            return 1
+
+    info = client.for_package(args.package, version, args.sha256)
+
+    if getattr(args, "json", False):
+        print(json.dumps(info.to_dict(), indent=2))
+        return 0 if info.available else 1
+
+    print(f"Upstream provenance: {args.package} {version}")
+    print(f"  File:      {info.filename or '(unresolved)'}")
+    if info.error:
+        print(f"  ERROR:     {info.error}")
+        return 1
+    if not info.available:
+        print("  NONE:      PyPI publishes no PEP 740 attestation for this release.")
+        print("             Absence is common (API-token uploads) and is not")
+        print("             evidence of tampering -- but nothing upstream vouches")
+        print("             for this file. Sealed's own seal only proves your")
+        print("             machine built it.")
+        print(f"  NOTE:      {LOCAL_LOG_CAVEAT}")
+        return 1
+
+    print("  PRESENT:   PyPI publishes a PEP 740 attestation bundle.")
+    for pub in info.publishers:
+        print(f"  Publisher: {pub}")
+        if pub.environment:
+            print(f"             environment: {pub.environment}")
+    for pt in info.predicate_types:
+        print(f"  Predicate: {pt}")
+    for digest in info.subject_digests:
+        print(f"  Subject:   sha256:{digest}")
+    for idx in info.transparency_log_indexes:
+        print(f"  Rekor:     logIndex {idx}")
+    if info.digest_match is True:
+        print("  MATCH:     attested digest equals the SHA-256 you supplied.")
+    elif info.digest_match is False:
+        print("  MISMATCH:  attested digest does NOT equal the SHA-256 you supplied.")
+        return 1
+    print("  Sigstore signature chain is parsed, not cryptographically verified.")
+    print(f"  NOTE:      {LOCAL_LOG_CAVEAT}")
+    return 0
 
 
 def cmd_consensus(args: argparse.Namespace) -> int:
@@ -671,11 +823,26 @@ def main() -> int:
     p_repro.add_argument("package", help="Package name (PyPI)")
     p_repro.add_argument("--version", "-v", help="Specific version")
 
-    # sandbox
-    p_sand = sub.add_parser("sandbox", help="Behavioral analysis: monitor what a package does at import")
-    p_sand.add_argument("package", help="Package name")
-    p_sand.add_argument("--version", "-v", help="Specific version")
-    p_sand.add_argument("--timeout", "-t", type=int, default=30, help="Timeout in seconds")
+    # trace (formerly "sandbox" -- it never contained anything)
+    for _name, _help in (
+        ("trace", "Trace import-time behavior (instrumentation, NOT a sandbox: "
+                  "traced code runs with full privileges and can bypass every hook)"),
+        ("sandbox", "Deprecated alias for `trace` (it was never a sandbox)"),
+    ):
+        p_trace = sub.add_parser(_name, help=_help)
+        p_trace.add_argument("package", help="Package name")
+        p_trace.add_argument("--version", "-v", help="Specific version")
+        p_trace.add_argument("--timeout", "-t", type=int, default=30, help="Timeout in seconds")
+
+    # provenance
+    p_prov = sub.add_parser(
+        "provenance",
+        help="Report upstream PyPI PEP 740 provenance (publisher attestation) for a release",
+    )
+    p_prov.add_argument("package", help="Package name (PyPI)")
+    p_prov.add_argument("--version", "-v", help="Specific version (default: latest)")
+    p_prov.add_argument("--sha256", help="Artifact SHA-256 to compare against the attested subject digest")
+    p_prov.add_argument("--json", action="store_true", help="Output as JSON")
 
     # consensus
     p_cons = sub.add_parser("consensus", help="Build N times independently, check agreement")
@@ -726,7 +893,9 @@ def main() -> int:
         "audit": cmd_audit,
         "keygen": cmd_keygen,
         "reproduce": cmd_reproduce,
-        "sandbox": cmd_sandbox,
+        "trace": cmd_trace,
+        "sandbox": cmd_trace,  # deprecated alias
+        "provenance": cmd_provenance,
         "consensus": cmd_consensus,
         "watchdog": cmd_watchdog,
         "trust": cmd_trust,

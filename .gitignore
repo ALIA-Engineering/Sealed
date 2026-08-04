@@ -11,5 +11,9 @@ build/
 .pytest_cache/
 *.log
 
+paper/*.aux
+paper/*.out
+paper/*.log
+
 .codegraph/
 .tokensave/

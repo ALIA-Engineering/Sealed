@@ -6,7 +6,7 @@ Produces bench_results.json with timing data for:
 - Seal creation (Ed25519 signing)
 - Seal verification (Ed25519 + chain integrity)
 - Lockfile generation and integrity check
-- Sandbox policy evaluation
+- Import-trace result evaluation
 - Scale test: 10, 100, 1000 files
 """
 
@@ -35,7 +35,7 @@ from sealed.seal import Seal, SealAuthority
 from sealed.verify import SealVerifier, VerifyResult
 from sealed.lockfile import Lockfile, LockEntry
 from sealed.attestation import SoftwareAttestor, Attestation
-from sealed.sandbox import SandboxResult, SandboxBehavior
+from sealed.tracer import TraceResult as SandboxResult, TracedBehavior as SandboxBehavior
 from sealed.policy import PolicyConfig, PolicyEngine, PolicyResult
 from sealed.registry import SealRegistry
 

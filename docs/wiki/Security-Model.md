@@ -20,7 +20,11 @@
 | Gap | Why | Mitigation |
 |-----|-----|------------|
 | Source code is safe | Sealed scans patterns, not logic | Use code review tools |
-| Sandbox catches all malware | Python-level patching, not kernel isolation | Catches common patterns, not targeted attacks |
+| Untrusted code can be run safely | `sealed trace` is instrumentation, **not** a sandbox: no containment of any kind | Use a disposable VM/container. Never run untrusted code under `sealed trace` |
+| Install-time code is observed | Only *import* time is traced; `setup.py` is regex-scanned, never observed executing | Read the source, or install into a throwaway environment |
+| `pip install` is protected | `sealed install` is a parallel path; pip is untouched | Use `sealed install` explicitly |
+| The transparency log is tamper-proof | Local SQLite, no external witness -- local write access lets an attacker rebuild the chain | Export seals off-machine; consult upstream PEP 740 provenance |
+| A seal proves the publisher's identity | Seals are self-signed with your TOFU-pinned key | `sealed provenance` reports upstream PyPI attestations where they exist |
 | Consensus = independent agreement | Same machine, same toolchain | True consensus needs multiple machines |
 | Transparency log is public | Local-only, no gossip protocol | Detects local equivocation only |
 | Build machine is clean (no TPM) | Software attestation measures, doesn't prove | Use TPM when available |
@@ -47,4 +51,18 @@
 
 **Source-level backdoor.** If the source code itself contains a backdoor (like xz utils), Sealed will faithfully build and seal it. The source audit catches common patterns but not targeted attacks.
 
-**ctypes/C extension sandbox escape.** A malicious package using ctypes or C extensions can bypass the behavioral sandbox. The sandbox catches Python-level attacks, not native code.
+**Anything that wants to evade `sealed trace`.** The tracer is instrumentation, not
+containment. Traced imports run with your full privileges. Documented bypasses:
+`os.system`/`os.popen` (recorded by the audit hook, still executed), `ctypes`/`cffi`
+native calls, `_socket` (the C accelerator under `socket`), `os.fork`/`os.spawn*`/
+`os.exec*` (the child has no hooks), C extension module init, and raw syscalls that
+emit no audit event. **Do not rely on it to run untrusted code.**
+
+**Install-time execution.** `setup.py` runs during install, not import. `sealed trace`
+never sees it; `audit_source.py` only regex-scans it.
+
+**Local transparency-log rewriting.** The log is SQLite under `~/.sealed` with no
+external witness or gossip protocol. An attacker with local write access can rebuild
+the whole hash chain and it will verify.
+
+**Anything installed by plain `pip`.** Sealed does not intercept pip.

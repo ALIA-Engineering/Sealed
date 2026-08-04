@@ -26,7 +26,15 @@ Sealed v0.1 provides source-to-binary provenance for Python packages. When you r
 
 3. **Reproducibility.** Two machines building the same package produce different chain hashes (different environments, timestamps). Sealed is a provenance system, not a reproducibility system.
 
-4. **Key security.** The signing key is stored as a hex file on disk (`~/.sealed/key.ed25519`). It is not encrypted, not passphrase-protected, and not stored in a hardware security module.
+4. **Key security.** The signing key may be stored as a hex file on disk (`~/.sealed/key.ed25519`) unless you set a passphrase or the OS keychain is used. In the plaintext case it is not encrypted and not in an HSM.
+
+5. **Publisher identity.** A seal is self-signed: it proves *your* machine built the artifact, not that the upstream publisher released that source. `sealed provenance` (PEP 740) reports upstream PyPI attestations where they exist -- and most releases have none. Sealed parses the Sigstore bundle; it does not verify the signature chain.
+
+6. **Transparency log integrity against a local attacker.** The log is SQLite under `~/.sealed` with no external witness and no gossip protocol. Anyone who can write those files can rebuild the hash chain so that it verifies. It detects accidental divergence and local equivocation, not a determined local attacker.
+
+7. **Containment of untrusted code.** `sealed trace` (formerly `sealed sandbox`) is instrumentation only. The traced import runs with your full privileges. `os.system`/`os.popen`, `ctypes`/`cffi`, `_socket`, `os.fork`/`os.spawn*`/`os.exec*`, C extension module init and raw syscalls all bypass its hooks. **Do not use it to run untrusted code.** Only import time is traced -- install-time `setup.py` execution is regex-scanned, never observed.
+
+8. **Protection of ordinary `pip install`.** Sealed provides a parallel install path. It does not hook, wrap, or replace pip.
 
 ## Threat Model
 

@@ -84,6 +84,8 @@ Sealed is a 22-module Python library with a CLI entry point. The modules form a 
    g. SealRegistry.store(seal, chain, attestation_method)
 
 4. pip install <all verified artifacts> --force-reinstall --no-deps
+   NOTE: Sealed calls pip; it does not hook pip. Ordinary `pip install <pkg>`
+   never consults Sealed and can overwrite a sealed install.
 ```
 
 ## File Storage

@@ -14,7 +14,11 @@ from sealed.policy import PolicyEngine, PolicyConfig
 from sealed.audit_source import SourceAuditor, AuditResult
 from sealed.keystore import Keystore
 from sealed.reproduce import ReproducibilityChecker
-from sealed.sandbox import BehavioralSandbox, SandboxResult
+from sealed.tracer import ImportTracer, TraceResult, TracedBehavior, NOT_A_SANDBOX_WARNING
+from sealed.sandbox import BehavioralSandbox, SandboxResult  # deprecated aliases
+from sealed.provenance import (
+    PyPIProvenanceClient, ProvenanceInfo, PublisherIdentity, check_provenance,
+)
 from sealed.consensus import ConsensusBuilder, ConsensusResult
 from sealed.watchdog import IntegrityWatchdog
 from sealed.trust_graph import TrustGraphBuilder, TrustGraph
@@ -34,11 +38,14 @@ __all__ = [
     "SourceAuditor", "AuditResult",
     "Keystore",
     "ReproducibilityChecker",
+    "ImportTracer", "TraceResult", "TracedBehavior", "NOT_A_SANDBOX_WARNING",
     "BehavioralSandbox", "SandboxResult",
+    "PyPIProvenanceClient", "ProvenanceInfo", "PublisherIdentity", "check_provenance",
     "ConsensusBuilder", "ConsensusResult",
     "IntegrityWatchdog",
     "TrustGraphBuilder", "TrustGraph",
     "TransparencyLog",
     "get_adapter", "PipAdapter", "NpmAdapter", "CargoAdapter",
     "OSKeychain",
+    "Lockfile", "LockEntry",
 ]
