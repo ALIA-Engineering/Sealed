@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.1 (2026-08-04)
 
 **Renamed: "behavioral sandbox" -> import-time behavioral tracing**
 - `sealed/sandbox.py` is now a deprecated shim over the new `sealed/tracer.py`.
@@ -31,8 +31,6 @@
   that `sealed install` is an alternative install path, not a guard on pip.
 - Documented that the transparency log is local SQLite with no external witness.
 - Counts corrected: 24 modules, 362 tests, 14 CLI commands (+1 deprecated alias).
-
-## v0.1.1 (2026-08-04)
 
 **Security fixes**
 - `sealed/tracer.py`: the trace output file is now created with
