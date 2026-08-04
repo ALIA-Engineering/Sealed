@@ -318,7 +318,7 @@ Shipped:
 
 - [Wiki: Quick Start](docs/wiki/Quick-Start.md)
 - [Wiki: Use Cases](docs/wiki/Use-Cases.md) (10 real-world scenarios)
-- [Wiki: Code Snippets](docs/wiki/Snippets.md) (12 copy-paste examples)
+- [Wiki: Code Snippets](docs/wiki/Snippets.md) (13 copy-paste examples)
 - [Wiki: Team Setup](docs/wiki/Team-Setup.md)
 - [Wiki: CI/CD Integration](docs/wiki/CI-CD.md)
 - [Wiki: CLI Reference](docs/wiki/CLI-Reference.md)

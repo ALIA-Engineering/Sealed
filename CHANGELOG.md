@@ -30,7 +30,7 @@
 - README, wiki, `docs/API.md`, `docs/SECURITY.md`, `docs/ARCHITECTURE.md` now state
   that `sealed install` is an alternative install path, not a guard on pip.
 - Documented that the transparency log is local SQLite with no external witness.
-- Counts corrected: 24 modules, 362 tests, 14 CLI commands (+1 deprecated alias).
+- Counts corrected: 24 modules, 364 tests, 14 CLI commands (+1 deprecated alias).
 
 **Security fixes**
 - `sealed/tracer.py`: the trace output file is now created with
