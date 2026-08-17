@@ -4,8 +4,8 @@
   <b>Tamper with the binary. The seal breaks.</b>
   <br><br>
   <a href="https://pypi.org/project/alia-sealed/"><img src="https://img.shields.io/pypi/v/alia-sealed?color=green" alt="PyPI"></a>
-  <a href="https://github.com/TxsharDev/Sealed/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
-  <a href="https://github.com/TxsharDev/Sealed/actions"><img src="https://img.shields.io/badge/tests-passing-green" alt="Tests"></a>
+  <a href="https://github.com/ALIA-Engineering/Sealed/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-green" alt="License"></a>
+  <a href="https://github.com/ALIA-Engineering/Sealed/actions"><img src="https://img.shields.io/badge/tests-passing-green" alt="Tests"></a>
   <br><br>
   <a href="docs/wiki/Home.md">Wiki</a> &nbsp;|&nbsp;
   <a href="docs/wiki/Quick-Start.md">Quick Start</a> &nbsp;|&nbsp;
@@ -332,4 +332,4 @@ Shipped:
 
 Apache-2.0 | ALIA Labs
 
-Built by [Tushar Sharma](https://github.com/TxsharDev) at ALIA Labs.
+Built by [Tushar Sharma](https://github.com/TxsharDev) at [ALIA Labs](https://alialabs.org).

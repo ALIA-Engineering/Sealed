@@ -59,7 +59,7 @@ Use the included workflow:
 ```yaml
 jobs:
   seal:
-    uses: TxsharDev/Sealed/.github/workflows/sealed-action.yml@main
+    uses: ALIA-Engineering/Sealed/.github/workflows/sealed-action.yml@main
     with:
       packages: "requests flask numpy"
       python-version: "3.12"

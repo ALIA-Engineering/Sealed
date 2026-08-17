@@ -9,7 +9,7 @@ description = "Cryptographic supply chain attestation. Every binary proven from 
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
-authors = [{name = "Tushar Sharma", email = "txshar@proton.me"}]
+authors = [{name = "Tushar Sharma", email = "txshar@proton.me"}, {name = "ALIA Labs", email = "adrian@alialabs.org"}]
 keywords = ["supply-chain", "attestation", "reproducible-builds", "cryptography", "security"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -28,8 +28,8 @@ dependencies = [
 sealed = "sealed.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/TxsharDev/Sealed"
-Repository = "https://github.com/TxsharDev/Sealed"
+Homepage = "https://github.com/ALIA-Engineering/Sealed"
+Repository = "https://github.com/ALIA-Engineering/Sealed"
 
 [tool.setuptools.packages.find]
 include = ["sealed*"]
